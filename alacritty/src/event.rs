@@ -13,7 +13,9 @@ use std::time::{Duration, Instant};
 use std::{env, f32, mem};
 
 use glutin::dpi::PhysicalSize;
-use glutin::event::{ElementState, Event as GlutinEvent, ModifiersState, MouseButton, WindowEvent};
+use glutin::event::{
+    ElementState, Event as GlutinEvent, ModifiersState, MouseButton, WindowEvent, IME,
+};
 use glutin::event_loop::{ControlFlow, EventLoop, EventLoopProxy, EventLoopWindowTarget};
 use glutin::platform::run_return::EventLoopExtRunReturn;
 #[cfg(all(feature = "wayland", not(any(target_os = "macos", windows))))]
@@ -1114,6 +1116,32 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                     },
                     WindowEvent::KeyboardInput { input, is_synthetic: false, .. } => {
                         self.key_input(input);
+                    },
+                    WindowEvent::IME(ime) => match ime {
+                        IME::Enabled => {
+                            self.ctx.display.ime_input.set_enabled(true);
+                        },
+                        // The text is commited thus should be written to PTY.
+                        IME::Commit(text) => {
+                            self.ctx.display.ime_input.clear_preedit();
+                            if self.ctx.display.collect_damage() {
+                                // Damage the entire line with preedit.
+                                let line = self.ctx.display.ime_input.line();
+                                let point = Point::new(line, Column(0));
+                                let num_cols = self.ctx.terminal.columns() as u32 - 1;
+                                self.ctx.display.damage_from_point(point, num_cols);
+                            }
+                            text.chars().for_each(|ch| self.received_char(ch));
+                        },
+                        // This text is being composed, thus should be shown as inline input to
+                        // the user.
+                        IME::Preedit(text, cursor_start, cursor_end) => {
+                            *self.ctx.dirty = true;
+                            self.ctx.display.ime_input.set_preedit(text, cursor_start, cursor_end);
+                        },
+                        IME::Disabled => {
+                            self.ctx.display.ime_input.set_enabled(false);
+                        },
                     },
                     WindowEvent::ModifiersChanged(modifiers) => self.modifiers_input(modifiers),
                     WindowEvent::ReceivedCharacter(c) => self.received_char(c),
