@@ -1,5 +1,5 @@
 //! Hand-rolled drawing of unicode [box drawing](http://www.unicode.org/charts/PDF/U2500.pdf)
-//! and [block elements](https://www.unicode.org/charts/PDF/U2580.pdf).
+//! and [block elements](https://www.unicode.org/charts/PDF/U2580.pdf), and also powerline symbols.
 
 use std::{cmp, mem, ops};
 
@@ -25,6 +25,8 @@ pub fn builtin_glyph(
     let mut glyph = match character {
         // Box drawing characters and block elements.
         '\u{2500}'..='\u{259f}' => box_drawing(character, metrics, offset),
+        // Powerline.
+        '\u{e0b0}'..='\u{e0b3}' => powerline_drawing(character, metrics),
         _ => return None,
     };
 
@@ -482,6 +484,60 @@ fn box_drawing(character: char, metrics: &Metrics, offset: &Delta<i8>) -> Raster
     RasterizedGlyph { character, top, left: 0, height: height as i32, width: width as i32, buffer }
 }
 
+fn powerline_drawing(character: char, metrics: &Metrics) -> RasterizedGlyph {
+    let height = metrics.line_height as usize;
+    let width = metrics.average_advance as usize;
+    let stroke_size = cmp::max(metrics.underline_thickness as usize, 1);
+    let mut canvas = Canvas::new(width, height);
+
+    let x_end = width as f32 - 1.;
+    let y_end = height as f32 - 1.;
+    let y_center = y_end / 2.;
+
+    // Powerline symbols: '','','',''.
+    for stroke_size in 0..2 * stroke_size {
+        let stroke_size = stroke_size as f32 / 2.;
+        if character == '\u{e0b0}' || character == '\u{e0b1}' {
+            canvas.draw_line(0., stroke_size, x_end - stroke_size, y_center);
+            canvas.draw_line(0., y_end - stroke_size, x_end - stroke_size, y_center);
+        }
+        if character == '\u{e0b2}' || character == '\u{e0b3}' {
+            canvas.draw_line(stroke_size, y_center, x_end, stroke_size);
+            canvas.draw_line(stroke_size, y_center, x_end, y_end - stroke_size);
+        }
+    }
+
+    if character == '\u{e0b0}' || character == '\u{e0b2}' {
+        let buffer = canvas.buffer_mut();
+        for row in 0..height {
+            let row_offset = row * width;
+            if character == '\u{e0b0}' {
+                for index in 1..width {
+                    let index = row_offset + index;
+                    if buffer[index - 1]._r.saturating_sub(u8::MAX / 4) > buffer[index]._r {
+                        break;
+                    }
+
+                    buffer[index - 1] = COLOR_FILL;
+                }
+            } else {
+                for index in (1..width).rev() {
+                    let index = row_offset + index;
+                    if buffer[index - 1]._r < buffer[index]._r.saturating_sub(u8::MAX / 4) {
+                        break;
+                    }
+
+                    buffer[index] = COLOR_FILL;
+                }
+            }
+        }
+    }
+
+    let top = height as i32 + metrics.descent as i32;
+    let buffer = BitmapBuffer::Rgb(canvas.into_raw());
+    RasterizedGlyph { character, top, left: 0, height: height as i32, width: width as i32, buffer }
+}
+
 #[repr(packed)]
 #[derive(Clone, Copy, Debug, Default)]
 struct Pixel {
@@ -795,29 +851,44 @@ mod tests {
     use super::*;
     use crossfont::Metrics;
 
+    // Dummy metrics values to test builtin glyphs coverage.
+    const METRICS: Metrics = Metrics {
+        average_advance: 6.,
+        line_height: 16.,
+        descent: 4.,
+        underline_position: 2.,
+        underline_thickness: 2.,
+        strikeout_position: 2.,
+        strikeout_thickness: 2.,
+    };
+
     #[test]
     fn builtin_line_drawing_glyphs_coverage() {
-        // Dummy metrics values to test built-in glyphs coverage.
-        let metrics = Metrics {
-            average_advance: 6.,
-            line_height: 16.,
-            descent: 4.,
-            underline_position: 2.,
-            underline_thickness: 2.,
-            strikeout_position: 2.,
-            strikeout_thickness: 2.,
-        };
+        let offset = Default::default();
+       let glyph_offset = Default::default();
 
+        // Test coverage of box drawing characters.
+        for character in '\u{2500}'..='\u{259f}' {
+            assert!(builtin_glyph(character, &METRICS, &offset, &glyph_offset).is_some());
+        }
+
+        for character in ('\u{2450}'..'\u{2500}').chain('\u{25a0}'..'\u{2600}') {
+            assert!(builtin_glyph(character, &METRICS, &offset, &glyph_offset).is_none());
+        }
+    }
+
+    #[test]
+    fn builtin_powerline_glyphs_coverage() {
         let offset = Default::default();
         let glyph_offset = Default::default();
 
         // Test coverage of box drawing characters.
-        for character in '\u{2500}'..='\u{259f}' {
-            assert!(builtin_glyph(character, &metrics, &offset, &glyph_offset).is_some());
+        for character in '\u{e0b0}'..='\u{e0b3}' {
+            assert!(builtin_glyph(character, &METRICS, &offset, &glyph_offset).is_some());
         }
 
-        for character in ('\u{2450}'..'\u{2500}').chain('\u{25a0}'..'\u{2600}') {
-            assert!(builtin_glyph(character, &metrics, &offset, &glyph_offset).is_none());
+        for character in ('\u{e0a0}'..'\u{e0b0}').chain('\u{e0b4}'..'\u{e0c0}') {
+            assert!(builtin_glyph(character, &METRICS, &offset, &glyph_offset).is_none());
         }
     }
 }
