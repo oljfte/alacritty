@@ -58,7 +58,7 @@ use crate::gl;
 #[cfg(all(feature = "x11", not(any(target_os = "macos", windows))))]
 static WINDOW_ICON: &[u8] = include_bytes!("../../alacritty.png");
 
-/// This should match the definition of IDI_ICON from `windows.rc`.
+/// This should match the definition of IDI_ICON from `alacritty-icon.rc`.
 #[cfg(windows)]
 const IDI_ICON: WORD = 0x101;
 
