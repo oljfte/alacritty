@@ -255,6 +255,11 @@ impl ImeInput {
 
     #[inline]
     pub fn set_enabled(&mut self, is_enabled: bool) {
+        if !is_enabled {
+            // Clear state when disabling input method.
+            *self = Default::default();
+        }
+
         self.is_enabled = is_enabled;
     }
 

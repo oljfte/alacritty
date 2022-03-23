@@ -1131,7 +1131,12 @@ impl input::Processor<EventProxy, ActionContext<'_, Notifier, EventProxy>> {
                                 let num_cols = self.ctx.terminal.columns() as u32 - 1;
                                 self.ctx.display.damage_from_point(point, num_cols);
                             }
+
+                            // Don't suppress chars for commit.
+                            let mut suppress = false;
+                            mem::swap(self.ctx.suppress_chars, &mut suppress);
                             text.chars().for_each(|ch| self.received_char(ch));
+                            *self.ctx.suppress_chars = suppress;
                         },
                         // This text is being composed, thus should be shown as inline input to
                         // the user.
