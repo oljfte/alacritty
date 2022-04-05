@@ -2015,7 +2015,7 @@ checksum = "ff1e4aa646495048ec7f3ffddc411e1d829c026a2ec62b39da15c1055e406eaa"
 [[package]]
 name = "winit"
 version = "0.26.1"
-source = "git+https://github.com/rust-windowing/winit?branch=composition-event#6a276879c31bec2da9640c9aa5cf9afbb3b19e4d"
+source = "git+https://github.com/rust-windowing/winit?branch=composition-event#a96351f79af3847cac2a355ac91e8bffc22d650f"
 dependencies = [
  "bitflags",
  "cocoa",
